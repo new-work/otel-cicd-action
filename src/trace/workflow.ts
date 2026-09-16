@@ -1,6 +1,6 @@
 import * as core from "@actions/core";
 import type { components } from "@octokit/openapi-types";
-import { type Attributes, context, SpanStatusCode, trace } from "@opentelemetry/api";
+import { type Attributes, context, SpanKind, trace } from "@opentelemetry/api";
 import {
   ATTR_CICD_PIPELINE_ACTION_NAME,
   ATTR_CICD_PIPELINE_NAME,
@@ -21,6 +21,7 @@ import {
 } from "@opentelemetry/semantic-conventions/incubating";
 import type { PullRequestData } from "../github";
 import { traceJob } from "./job";
+import { recordConclusion } from "./status";
 
 function traceWorkflowRun(
   workflowRun: components["schemas"]["workflow-run"],
@@ -35,16 +36,21 @@ function traceWorkflowRun(
 
   return tracer.startActiveSpan(
     workflowRun.name ?? workflowRun.display_title,
-    { attributes, root: true, startTime },
+    // The pipeline run span kind SHOULD be SERVER, while its task run spans —
+    // the job and step spans below — SHOULD be INTERNAL, which is the default.
+    // https://opentelemetry.io/docs/specs/semconv/cicd/cicd-spans/#pipeline-run
+    { attributes, kind: SpanKind.SERVER, root: true, startTime },
     (rootSpan) => {
-      const code = workflowRun.conclusion === "failure" ? SpanStatusCode.ERROR : SpanStatusCode.OK;
-      rootSpan.setStatus({ code });
+      recordConclusion(rootSpan, workflowRun.conclusion);
 
-      if (jobs.length > 0) {
-        // "Queued" span represent the time between the workflow has been started_at and
-        // the first job has been picked up by a runner
+      // "Queued" span represent the time between the workflow has been started_at and
+      // the first job has been picked up by a runner. Jobs are not guaranteed to be
+      // ordered by start time, so take the earliest one.
+      const jobStartTimes = jobs.map((job) => new Date(job.started_at).getTime()).filter(Number.isFinite);
+
+      if (jobStartTimes.length > 0) {
         const queuedSpan = tracer.startSpan("Queued", { startTime }, context.active());
-        queuedSpan.end(new Date(jobs[0].started_at));
+        queuedSpan.end(new Date(Math.max(startTime.getTime(), Math.min(...jobStartTimes))));
       }
 
       for (const job of jobs) {
@@ -100,7 +106,6 @@ function workflowRunToAttributes(
     "github.head_sha": workflowRun.head_sha,
     "github.path": workflowRun.path,
     "github.display_title": workflowRun.display_title,
-    error: workflowRun.conclusion === "failure",
     ...prsToAttributes(prs, workflowRun.updated_at),
   };
 }

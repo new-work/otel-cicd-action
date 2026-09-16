@@ -13,7 +13,7 @@ import { isHttpEndpoint, stringToRecord } from "./tracer";
 
 const OTEL_CONSOLE_ONLY = process.env["OTEL_CONSOLE_ONLY"] === "true";
 
-function createMeterProvider(endpoint: string, headers: string, attributes: Attributes) {
+function createMeterProvider(endpoint: string, headers: string, attributes: Attributes, insecureSkipVerify = false) {
   let exporter: PushMetricExporter = new ConsoleMetricExporter();
 
   if (!OTEL_CONSOLE_ONLY) {
@@ -21,10 +21,13 @@ function createMeterProvider(endpoint: string, headers: string, attributes: Attr
       ? new ProtoOTLPMetricExporter({
           url: endpoint,
           headers: stringToRecord(headers),
+          ...(insecureSkipVerify && { httpAgentOptions: { rejectUnauthorized: false } }),
         })
       : new GrpcOTLPMetricExporter({
           url: endpoint,
-          credentials: credentials.createSsl(),
+          credentials: credentials.createSsl(undefined, undefined, undefined, {
+            rejectUnauthorized: !insecureSkipVerify,
+          }),
           metadata: Metadata.fromHttp2Headers(stringToRecord(headers)),
         });
   }
