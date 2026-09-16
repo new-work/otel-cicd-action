@@ -1,9 +1,9 @@
 interface LeadTimePhaseDurations {
+  approved_to_merged: number;
   first_commit_to_pr_created: number;
+  merged_to_deployed: number;
   pr_created_to_ready_for_review: number;
   ready_for_review_to_approved: number;
-  approved_to_merged: number;
-  merged_to_deployed: number;
 }
 
 type LeadTimePhase = keyof LeadTimePhaseDurations;
@@ -17,12 +17,12 @@ const LEAD_TIME_PHASES: LeadTimePhase[] = [
 ];
 
 interface LeadTimeDates {
+  deployedAt: string;
+  firstApprovedAt: string | null;
   firstCommitAt: string;
+  mergedAt: string;
   prCreatedAt: string;
   readyForReviewAt: string | null;
-  firstApprovedAt: string | null;
-  mergedAt: string;
-  deployedAt: string;
 }
 
 interface LeadTimeDurations {
@@ -76,5 +76,5 @@ function durationMs(startAt: string, endAt: string): number {
   return Math.max(0, new Date(endAt).getTime() - new Date(startAt).getTime());
 }
 
-export { calculateLeadTimeDurations, getLeadTimePhaseDurations, LEAD_TIME_PHASES };
 export type { LeadTimeDates, LeadTimeDurations, LeadTimePhase, LeadTimePhaseDurations };
+export { calculateLeadTimeDurations, getLeadTimePhaseDurations, LEAD_TIME_PHASES };

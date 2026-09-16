@@ -54,11 +54,11 @@ async function recordOctokit(name: string, token: string) {
 }
 
 interface Replay {
+  data: unknown;
   method: RequestMethod;
   path: string;
-  url: string;
   status: number;
-  data: unknown;
+  url: string;
 }
 
 async function writeReplay(path: FileHandle, replay: Replay) {
@@ -87,8 +87,16 @@ async function replayOctokit(name: string, token: string) {
 
   const octokit = new Octokit() as unknown as InstanceType<typeof GitHub>;
 
+  // Serialize reads so concurrent requests don't interleave lines from the shared stream
+  let pendingRead: Promise<unknown> = Promise.resolve();
+
   octokit.hook.wrap("request", async (_, options) => {
-    const replay = await readReplay(rl);
+    const readPromise = pendingRead.then(() => readReplay(rl));
+    pendingRead = readPromise.then(
+      () => undefined,
+      () => undefined
+    );
+    const replay = await readPromise;
 
     if (options.url !== replay.path || options.method !== replay.method) {
       return Promise.reject(

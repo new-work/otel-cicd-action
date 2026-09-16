@@ -114,7 +114,7 @@ async function safeGetPullRequestData(octokit: ReturnType<typeof getOctokit>, pr
     prLabels = await getPRsLabels(context, octokit, prNumbers);
   } catch (error) {
     if (isOctokitError(error)) {
-      core.info(`Failed to get PR labels: ${error.message}}`);
+      core.info(`Failed to get PR labels: ${error.message}`);
     } else {
       throw error;
     }
@@ -135,7 +135,7 @@ async function safeGetPullRequestData(octokit: ReturnType<typeof getOctokit>, pr
       });
     } catch (error) {
       if (isOctokitError(error)) {
-        core.info(`Failed to get PR data for ${prNumber}: ${error.message}}`);
+        core.info(`Failed to get PR data for ${prNumber}: ${error.message}`);
         prs.push({
           labels: prLabels[prNumber] ?? [],
           details: null,
@@ -170,7 +170,7 @@ async function fetchGithub(token: string, runId: number) {
     jobAnnotations = await getJobsAnnotations(context, octokit, jobsId);
   } catch (error) {
     if (isOctokitError(error)) {
-      core.info(`Failed to get job annotations: ${error.message}}`);
+      core.info(`Failed to get job annotations: ${error.message}`);
     } else {
       throw error;
     }
@@ -202,6 +202,11 @@ async function run() {
     const runId = Number.parseInt(core.getInput("runId") || `${context.runId}`, 10);
     const extraAttributes = stringToRecord(core.getInput("extraAttributes"));
     const ghToken = core.getInput("githubToken") || process.env["GITHUB_TOKEN"] || "";
+    const otlpInsecureSkipVerify = core.getBooleanInput("otlpInsecureSkipVerify");
+
+    if (otlpInsecureSkipVerify) {
+      core.warning("TLS certificate verification is disabled for the OTLP exporter.");
+    }
 
     core.info("Use Github API to fetch workflow data");
     const { workflowRun, jobs, jobAnnotations, prs } = await fetchGithub(ghToken, runId);
@@ -219,8 +224,8 @@ async function run() {
       [ATTR_SERVICE_VERSION]: workflowRun.head_sha,
       ...extraAttributes,
     };
-    const tracerProvider = createTracerProvider(otlpEndpoint, otlpHeaders, attributes);
-    const meterProvider = createMeterProvider(otlpEndpoint, otlpHeaders, attributes);
+    const tracerProvider = createTracerProvider(otlpEndpoint, otlpHeaders, attributes, otlpInsecureSkipVerify);
+    const meterProvider = createMeterProvider(otlpEndpoint, otlpHeaders, attributes, otlpInsecureSkipVerify);
 
     core.info(`Trace workflow run for ${runId} and export to ${otlpEndpoint}`);
     const traceId = traceWorkflowRun(workflowRun, jobs, jobAnnotations, prs);
@@ -245,4 +250,4 @@ async function run() {
   }
 }
 
-export { run, isOctokitError };
+export { isOctokitError, run };
